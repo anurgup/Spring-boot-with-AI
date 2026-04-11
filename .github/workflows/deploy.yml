@@ -1,58 +1,151 @@
-name: Build & Deploy
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ master ]
+    branches: [main]
   pull_request:
-    branches: [ master ]
+    branches: [main]
+
+# Cancel in-progress runs on the same branch when a new push arrives
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # ── Job 1: Build & Test (runs on every PR and push) ──────────────────────────
-  build:
-    name: Build & Test
+
+  # ── Job 1: Build + Test root app (src/) ──────────────────────────────────────
+  build-app:
+    name: "Build & Test: App"
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 11
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: temurin
           cache: maven
 
-      - name: Build with Maven (skip tests for now — no Cassandra in CI)
-        run: |
-          # Find the correct pom.xml (in CassandraBootIntegration subfolder)
-          POM=$(find . -name "pom.xml" | grep CassandraBootIntegration | head -1)
-          if [ -n "$POM" ]; then
-            mvn -f "$POM" clean package -DskipTests
-          else
-            mvn clean package -DskipTests
-          fi
+      - name: Build & Test
+        run: mvn -f pom.xml clean verify --no-transfer-progress
 
-      - name: Upload build artifact
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-test-results
+          path: target/surefire-reports/
+          retention-days: 7
+
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
-          path: "**/target/*.jar"
+          path: target/*.jar
           retention-days: 1
 
-  # ── Job 2: Deploy to Render (only on push to master, not PRs) ────────────────
+  # ── Job 2: Build + Test employee-service ─────────────────────────────────────
+  build-employee-service:
+    name: "Build & Test: Employee Service"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      # Tests use pure Mockito (@ExtendWith(MockitoExtension.class)) — no MongoDB needed
+      - name: Build & Test
+        run: mvn -f employee-service/pom.xml clean verify --no-transfer-progress
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: employee-service-test-results
+          path: employee-service/target/surefire-reports/
+          retention-days: 7
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: employee-service-jar
+          path: employee-service/target/*.jar
+          retention-days: 1
+
+  # ── Job 3: Deploy to Render (push to main only) ───────────────────────────────
   deploy:
     name: Deploy to Render
     runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    needs: [build-app, build-employee-service]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Trigger Render Deploy
-        env:
-          SPRING_PROFILES_ACTIVE: staging
+      - name: Trigger Render deploy
+        id: render
         run: |
-          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            --fail-with-body
-          echo "✅ Deploy triggered on Render"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Deploy triggered (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Deploy hook returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Notify Slack — deployed
+        if: success() && env.SLACK_BOT_TOKEN != ''
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          slack-message: |
+            ✅ *Deployed to Render* 🚀
+            *Repo:* `${{ github.repository }}`
+            *Commit:* ${{ github.event.head_commit.message }}
+            *By:* ${{ github.actor }}
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Build>
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Notify Slack — deploy failed
+        if: failure() && env.SLACK_BOT_TOKEN != ''
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          slack-message: |
+            ❌ *Deploy FAILED*
+            *Repo:* `${{ github.repository }}`
+            *Branch:* `${{ github.ref_name }}`
+            *By:* ${{ github.actor }}
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Failure>
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+  # ── Job 4: Notify Slack on PR build result ────────────────────────────────────
+  notify-pr:
+    name: Notify PR Status
+    runs-on: ubuntu-latest
+    needs: [build-app, build-employee-service]
+    if: always() && github.event_name == 'pull_request' && env.SLACK_BOT_TOKEN != ''
+
+    steps:
+      - name: Post build status to Slack
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          slack-message: |
+            ${{ (needs.build-app.result == 'success' && needs.build-employee-service.result == 'success') && '✅' || '❌' }} *PR Build ${{ (needs.build-app.result == 'success' && needs.build-employee-service.result == 'success') && 'Passed' || 'Failed' }}*
+            *PR:* <${{ github.event.pull_request.html_url }}|${{ github.event.pull_request.title }}>
+            *Branch:* `${{ github.head_ref }}` → `${{ github.base_ref }}`
+            *By:* ${{ github.actor }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

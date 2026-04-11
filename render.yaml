@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: employee-service
+    runtime: docker
+    dockerfilePath: ./employee-service/Dockerfile
+    dockerContext: ./employee-service
+    branch: main
+    autoDeploy: true           # auto-deploy on every push to main
+
+    envVars:
+      - key: MONGODB_URI
+        sync: false            # set manually in Render dashboard (sensitive)
+      - key: SPRING_PROFILES_ACTIVE
+        value: staging
+      - key: SERVER_PORT
+        value: "8081"
