@@ -1,0 +1,96 @@
+package com.learning.employee.service;
+
+import com.learning.employee.dto.*;
+import com.learning.employee.exception.DuplicateEmailException;
+import com.learning.employee.exception.EmployeeNotFoundException;
+import com.learning.employee.mapper.EmployeeMapper;
+import com.learning.employee.model.Employee;
+import com.learning.employee.repository.EmployeeRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import java.math.BigDecimal;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class EmployeeServiceTest {
+
+    @Mock private EmployeeRepository employeeRepository;
+    @Mock private EmployeeMapper employeeMapper;
+    @Mock private MongoTemplate mongoTemplate;
+    @InjectMocks private EmployeeService employeeService;
+
+    @Test
+    void createEmployee_Success() {
+        CreateEmployeeRequest req = CreateEmployeeRequest.builder()
+                .firstName("Anurag").lastName("Sharma")
+                .email("a@b.com").status("active").build();
+        Employee entity = Employee.builder().id("emp_1").email("a@b.com").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").email("a@b.com").build();
+
+        when(employeeRepository.existsByEmail("a@b.com")).thenReturn(false);
+        when(employeeMapper.toEntity(req)).thenReturn(entity);
+        when(employeeRepository.save(entity)).thenReturn(entity);
+        when(employeeMapper.toResponse(entity)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.createEmployee(req);
+        assertThat(result.getId()).isEqualTo("emp_1");
+    }
+
+    @Test
+    void createEmployee_DuplicateEmail_ThrowsException() {
+        CreateEmployeeRequest req = CreateEmployeeRequest.builder()
+                .firstName("A").lastName("B").email("dup@b.com").build();
+        when(employeeRepository.existsByEmail("dup@b.com")).thenReturn(true);
+        assertThatThrownBy(() -> employeeService.createEmployee(req))
+                .isInstanceOf(DuplicateEmailException.class);
+    }
+
+    @Test
+    void updateEmployee_NotFound_ThrowsException() {
+        when(employeeRepository.findById("unknown")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> employeeService.updateEmployee("unknown", new UpdateEmployeeRequest()))
+                .isInstanceOf(EmployeeNotFoundException.class);
+    }
+
+    @Test
+    void updateEmployee_Success() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com").build();
+        UpdateEmployeeRequest req = UpdateEmployeeRequest.builder()
+                .designation("Lead").salary(BigDecimal.valueOf(90000)).build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").designation("Lead").build();
+
+        when(employeeRepository.findById("emp_1")).thenReturn(Optional.of(employee));
+        when(employeeRepository.save(employee)).thenReturn(employee);
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.updateEmployee("emp_1", req);
+        assertThat(result.getDesignation()).isEqualTo("Lead");
+    }
+
+    @Test
+    void deleteEmployee_NotFound_ThrowsException() {
+        when(employeeRepository.findById("unknown")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> employeeService.deleteEmployee("unknown"))
+                .isInstanceOf(EmployeeNotFoundException.class);
+    }
+
+    @Test
+    void deleteEmployee_Success() {
+        Employee employee = Employee.builder().id("emp_1").build();
+        when(employeeRepository.findById("emp_1")).thenReturn(Optional.of(employee));
+        doNothing().when(employeeRepository).delete(employee);
+
+        DeleteResponse result = employeeService.deleteEmployee("emp_1");
+        assertThat(result.getId()).isEqualTo("emp_1");
+        assertThat(result.getDeletedAt()).isNotNull();
+    }
+}
