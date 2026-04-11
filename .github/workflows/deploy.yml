@@ -103,7 +103,8 @@ jobs:
           fi
 
       - name: Notify Slack — deployed
-        if: success() && env.SLACK_BOT_TOKEN != ''
+        if: success()
+        continue-on-error: true
         uses: slackapi/slack-github-action@v1.27.0
         with:
           channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
@@ -117,7 +118,8 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Notify Slack — deploy failed
-        if: failure() && env.SLACK_BOT_TOKEN != ''
+        if: failure()
+        continue-on-error: true
         uses: slackapi/slack-github-action@v1.27.0
         with:
           channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
@@ -135,10 +137,11 @@ jobs:
     name: Notify PR Status
     runs-on: ubuntu-latest
     needs: [build-app, build-employee-service]
-    if: always() && github.event_name == 'pull_request' && env.SLACK_BOT_TOKEN != ''
+    if: always() && github.event_name == 'pull_request'
 
     steps:
       - name: Post build status to Slack
+        continue-on-error: true
         uses: slackapi/slack-github-action@v1.27.0
         with:
           channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
