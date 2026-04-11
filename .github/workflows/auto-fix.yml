@@ -1,0 +1,208 @@
+name: Auto Fix on Build Failure
+
+on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types: [completed]
+
+jobs:
+  auto-fix:
+    name: Analyze and Auto Fix
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      - name: Get failed job logs
+        id: get-logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID="${{ github.event.workflow_run.id }}"
+          echo "Fetching logs for run $RUN_ID"
+
+          # Get all jobs for this run
+          JOBS=$(gh api repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs)
+
+          # Find failed jobs and collect their logs
+          FAILED_LOGS=""
+          while IFS= read -r job_id; do
+            JOB_NAME=$(echo "$JOBS" | jq -r ".jobs[] | select(.id == $job_id) | .name")
+            echo "Getting logs for failed job: $JOB_NAME (id: $job_id)"
+            JOB_LOG=$(gh api repos/${{ github.repository }}/actions/jobs/$job_id/logs 2>/dev/null || echo "Could not fetch logs")
+            FAILED_LOGS="${FAILED_LOGS}\n\n=== Job: $JOB_NAME ===\n${JOB_LOG}"
+          done < <(echo "$JOBS" | jq -r '.jobs[] | select(.conclusion == "failure") | .id')
+
+          # Save to file (avoid env var size limits)
+          echo -e "$FAILED_LOGS" > /tmp/failed_logs.txt
+          echo "Logs saved ($(wc -c < /tmp/failed_logs.txt) bytes)"
+
+      - name: Collect relevant source files
+        run: |
+          {
+            echo "=== employee-service/pom.xml ==="
+            cat employee-service/pom.xml
+            echo ""
+            echo "=== employee-service/Dockerfile ==="
+            cat employee-service/Dockerfile
+            echo ""
+            echo "=== .github/workflows/deploy.yml ==="
+            cat .github/workflows/deploy.yml
+            echo ""
+            echo "=== Source files ==="
+            find employee-service/src/main -name "*.java" | while read f; do
+              echo "--- $f ---"
+              cat "$f"
+              echo ""
+            done
+            echo "=== Test files ==="
+            find employee-service/src/test -name "*.java" | while read f; do
+              echo "--- $f ---"
+              cat "$f"
+              echo ""
+            done
+          } > /tmp/source_context.txt
+          echo "Source context saved ($(wc -c < /tmp/source_context.txt) bytes)"
+
+      - name: Call Claude API for fix
+        id: claude-fix
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          LOGS=$(cat /tmp/failed_logs.txt | head -c 8000)
+          SOURCE=$(cat /tmp/source_context.txt | head -c 12000)
+
+          PROMPT="You are a senior Java/Spring Boot engineer. A CI/CD pipeline has failed. Analyze the error and provide ONLY the fixed file contents.
+
+          FAILED BUILD LOGS:
+          ${LOGS}
+
+          SOURCE FILES:
+          ${SOURCE}
+
+          Instructions:
+          - Identify the root cause from the logs
+          - Output ONLY changed files in this exact format for each file:
+            FILE: <relative-path>
+            \`\`\`
+            <full file content>
+            \`\`\`
+          - Do not output explanation, only the FILE blocks
+          - Fix only what is broken, do not refactor or add features"
+
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              '{
+                model: "claude-sonnet-4-6",
+                max_tokens: 4096,
+                messages: [{role: "user", content: $prompt}]
+              }')")
+
+          echo "$RESPONSE" | jq -r '.content[0].text' > /tmp/claude_fix.txt
+          echo "Claude response saved"
+          cat /tmp/claude_fix.txt
+
+      - name: Apply fixes from Claude
+        id: apply-fixes
+        run: |
+          FIX_CONTENT=$(cat /tmp/claude_fix.txt)
+          FIXED=false
+
+          # Parse FILE blocks and write each file
+          echo "$FIX_CONTENT" | awk '
+            /^FILE: / {
+              if (filepath != "" && in_block) {
+                close(filepath)
+              }
+              filepath = substr($0, 7)
+              in_block = 0
+              next
+            }
+            /^```$/ || /^``` *$/ {
+              if (!in_block && filepath != "") {
+                in_block = 1
+                next
+              } else {
+                in_block = 0
+                next
+              }
+            }
+            in_block && filepath != "" {
+              print > filepath
+            }
+          '
+
+          # Check if any files were changed
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+            echo "No file changes detected from Claude fix"
+          else
+            echo "no_changes=false" >> $GITHUB_OUTPUT
+            echo "Files changed:"
+            git diff --name-only
+          fi
+
+      - name: Verify fix compiles
+        if: steps.apply-fixes.outputs.no_changes == 'false'
+        run: |
+          # Try building employee-service — most common failure point
+          if [ -f "employee-service/pom.xml" ]; then
+            mvn -f employee-service/pom.xml clean verify --no-transfer-progress -q && \
+              echo "BUILD_OK=true" >> $GITHUB_ENV || \
+              echo "BUILD_OK=false" >> $GITHUB_ENV
+          else
+            echo "BUILD_OK=true" >> $GITHUB_ENV
+          fi
+
+      - name: Commit and push fix
+        if: steps.apply-fixes.outputs.no_changes == 'false' && env.BUILD_OK == 'true'
+        run: |
+          git config user.name "claude-autofix[bot]"
+          git config user.email "claude-autofix@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(auto): Claude auto-fix for failed build ${{ github.event.workflow_run.id }}"
+          git push
+
+      - name: Notify Slack — fix applied
+        if: steps.apply-fixes.outputs.no_changes == 'false' && env.BUILD_OK == 'true'
+        continue-on-error: true
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          slack-message: |
+            🤖 *Claude Auto-Fix Applied*
+            *Repo:* `${{ github.repository }}`
+            *Fixed build:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}|View Failed Run>
+            *Fix commit:* pushed to `${{ github.event.workflow_run.head_branch }}`
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Notify Slack — could not fix
+        if: steps.apply-fixes.outputs.no_changes == 'true' || env.BUILD_OK == 'false'
+        continue-on-error: true
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          slack-message: |
+            ⚠️ *Build Failed — Claude Could Not Auto-Fix*
+            *Repo:* `${{ github.repository }}`
+            *Failed run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}|View Logs>
+            Manual intervention needed.
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
