@@ -1,10 +1,10 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM maven:3.9-eclipse-temurin-17-alpine AS build
 WORKDIR /app
 
 # Copy pom first so Maven dependency layer is cached between builds
 COPY pom.xml .
-RUN mvn dependency:go-offline -q 2>/dev/null || true
+RUN mvn dependency:go-offline -q
 
 COPY src ./src
 RUN mvn clean package -DskipTests --no-transfer-progress
