@@ -84,6 +84,18 @@ public class EmployeeService {
                 .build();
     }
 
+    public List<EmployeeResponse> getEmployeesByDepartment(String department) {
+        Query query = new Query();
+        query.addCriteria(Criteria.where("department").is(department));
+        List<Employee> employees = mongoTemplate.find(query, Employee.class);
+        if (employees.isEmpty()) {
+            throw new EmployeeNotFoundException("No employees found in department: " + department);
+        }
+        return employees.stream()
+                .map(employeeMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
     public EmployeeResponse updateEmployee(String id, UpdateEmployeeRequest request) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new EmployeeNotFoundException(id));

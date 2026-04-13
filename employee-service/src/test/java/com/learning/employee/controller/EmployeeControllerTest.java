@@ -67,7 +67,7 @@ class EmployeeControllerTest {
         return EmployeeResponse.builder()
                 .id("emp_xyz789").firstName("Anurag").lastName("Sharma")
                 .email("anurag.sharma@company.com").department("Engineering")
-                .designation("Senior Developer").status("active")
+                .designation("Senior Developer").salary(BigDecimal.valueOf(85000)).status("active")
                 .createdAt(Instant.now()).updatedAt(Instant.now()).build();
     }
 
@@ -120,6 +120,47 @@ class EmployeeControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.pagination.total").value(1));
+    }
+
+    @Test
+    void getEmployeesByDepartment_Success() throws Exception {
+        List<EmployeeResponse> employees = List.of(
+                EmployeeResponse.builder()
+                        .id("emp_xyz789").firstName("Anurag").lastName("Sharma")
+                        .email("anurag.sharma@company.com").department("Sales")
+                        .salary(BigDecimal.valueOf(85000)).status("active").build());
+        when(employeeService.getEmployeesByDepartment("Sales")).thenReturn(employees);
+        mockMvc.perform(get("/api/employee/by-department").param("department", "Sales"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].department").value("Sales"))
+                .andExpect(jsonPath("$.data[0].email").value("anurag.sharma@company.com"))
+                .andExpect(jsonPath("$.data[0].id").value("emp_xyz789"));
+    }
+
+    @Test
+    void getEmployeesByDepartment_NotFound() throws Exception {
+        when(employeeService.getEmployeesByDepartment("NonExistent"))
+                .thenThrow(new EmployeeNotFoundException("No employees found in department: NonExistent"));
+        mockMvc.perform(get("/api/employee/by-department").param("department", "NonExistent"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    void getEmployeesByDepartment_MissingDepartment_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/employee/by-department"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void getEmployeesByDepartment_BlankDepartment_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/employee/by-department").param("department", "   "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
     }
 
     @Test
