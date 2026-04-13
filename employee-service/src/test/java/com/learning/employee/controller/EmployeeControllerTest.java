@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
@@ -165,5 +166,49 @@ class EmployeeControllerTest {
         mockMvc.perform(delete("/api/employee/unknown"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
+    void searchByEmployeeId_Success() throws Exception {
+        List<EmployeeResponse> results = List.of(buildEmployeeResponse());
+        when(employeeService.searchByEmployeeId("emp_xyz")).thenReturn(results);
+        mockMvc.perform(get("/api/employee/search").param("employeeId", "emp_xyz"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].id").value("emp_xyz789"));
+    }
+
+    @Test
+    void searchByEmployeeId_CaseInsensitivePartialMatch() throws Exception {
+        List<EmployeeResponse> results = List.of(buildEmployeeResponse());
+        when(employeeService.searchByEmployeeId("EMP_XYZ")).thenReturn(results);
+        mockMvc.perform(get("/api/employee/search").param("employeeId", "EMP_XYZ"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void searchByEmployeeId_NoMatches_ReturnsEmptyList() throws Exception {
+        when(employeeService.searchByEmployeeId("nonexistent")).thenReturn(Collections.emptyList());
+        mockMvc.perform(get("/api/employee/search").param("employeeId", "nonexistent"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void searchByEmployeeId_BlankId_Returns400() throws Exception {
+        mockMvc.perform(get("/api/employee/search").param("employeeId", "  "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void searchByEmployeeId_MissingParam_Returns400() throws Exception {
+        mockMvc.perform(get("/api/employee/search"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
     }
 }

@@ -84,6 +84,15 @@ public class EmployeeService {
                 .build();
     }
 
+    public List<EmployeeResponse> searchByEmployeeId(String employeeId) {
+        Query query = new Query();
+        query.addCriteria(Criteria.where("id").regex(employeeId, "i"));
+        List<Employee> employees = mongoTemplate.find(query, Employee.class);
+        return employees.stream()
+                .map(employeeMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
     public EmployeeResponse updateEmployee(String id, UpdateEmployeeRequest request) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new EmployeeNotFoundException(id));

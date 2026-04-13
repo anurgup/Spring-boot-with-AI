@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,6 +36,19 @@ public class EmployeeController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortOrder) {
         return ResponseEntity.ok(employeeService.getEmployees(page, limit, department, status, search, sortBy, sortOrder));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<EmployeeResponse>>> searchByEmployeeId(
+            @RequestParam(required = false) String employeeId) {
+        if (employeeId == null) {
+            throw new IllegalArgumentException("employeeId parameter is required");
+        }
+        if (employeeId.isBlank()) {
+            throw new IllegalArgumentException("employeeId must not be blank");
+        }
+        List<EmployeeResponse> results = employeeService.searchByEmployeeId(employeeId);
+        return ResponseEntity.ok(ApiResponse.success(results, "Search completed successfully"));
     }
 
     @PatchMapping("/{id}")
