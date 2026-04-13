@@ -12,12 +12,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,6 +56,86 @@ class EmployeeServiceTest {
         when(employeeRepository.existsByEmail("dup@b.com")).thenReturn(true);
         assertThatThrownBy(() -> employeeService.createEmployee(req))
                 .isInstanceOf(DuplicateEmailException.class);
+    }
+
+    @Test
+    void getEmployees_NoDateFilter_Success() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com").department("Engineering").build();
+        EmployeeListResponse listResponse = EmployeeListResponse.builder().id("emp_1").email("a@b.com").build();
+
+        when(mongoTemplate.count(any(Query.class), eq(Employee.class))).thenReturn(1L);
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toListResponse(employee)).thenReturn(listResponse);
+
+        ApiResponse<List<EmployeeListResponse>> result = employeeService.getEmployees(
+                1, 10, null, null, null, "createdAt", "desc", null, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).hasSize(1);
+        assertThat(result.getPagination().getTotal()).isEqualTo(1);
+    }
+
+    @Test
+    void getEmployees_WithDateRange_Success() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com")
+                .joiningDate(LocalDate.of(2024, 6, 15)).build();
+        EmployeeListResponse listResponse = EmployeeListResponse.builder().id("emp_1").email("a@b.com").build();
+
+        when(mongoTemplate.count(any(Query.class), eq(Employee.class))).thenReturn(1L);
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toListResponse(employee)).thenReturn(listResponse);
+
+        ApiResponse<List<EmployeeListResponse>> result = employeeService.getEmployees(
+                1, 10, null, null, null, "createdAt", "desc",
+                LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).hasSize(1);
+    }
+
+    @Test
+    void getEmployees_WithOnlyJoinDateFrom_Success() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com")
+                .joiningDate(LocalDate.of(2024, 6, 15)).build();
+        EmployeeListResponse listResponse = EmployeeListResponse.builder().id("emp_1").email("a@b.com").build();
+
+        when(mongoTemplate.count(any(Query.class), eq(Employee.class))).thenReturn(1L);
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toListResponse(employee)).thenReturn(listResponse);
+
+        ApiResponse<List<EmployeeListResponse>> result = employeeService.getEmployees(
+                1, 10, null, null, null, "createdAt", "desc",
+                LocalDate.of(2024, 1, 1), null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).hasSize(1);
+    }
+
+    @Test
+    void getEmployees_WithOnlyJoinDateTo_Success() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com")
+                .joiningDate(LocalDate.of(2024, 6, 15)).build();
+        EmployeeListResponse listResponse = EmployeeListResponse.builder().id("emp_1").email("a@b.com").build();
+
+        when(mongoTemplate.count(any(Query.class), eq(Employee.class))).thenReturn(1L);
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toListResponse(employee)).thenReturn(listResponse);
+
+        ApiResponse<List<EmployeeListResponse>> result = employeeService.getEmployees(
+                1, 10, null, null, null, "createdAt", "desc",
+                null, LocalDate.of(2024, 12, 31));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).hasSize(1);
+    }
+
+    @Test
+    void getEmployees_InvalidDateRange_ThrowsException() {
+        assertThatThrownBy(() -> employeeService.getEmployees(
+                1, 10, null, null, null, "createdAt", "desc",
+                LocalDate.of(2024, 12, 31), LocalDate.of(2024, 1, 1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("joinDateFrom must not be after joinDateTo");
     }
 
     @Test

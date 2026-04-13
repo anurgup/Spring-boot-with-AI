@@ -14,6 +14,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,7 +37,12 @@ public class EmployeeService {
 
     public ApiResponse<List<EmployeeListResponse>> getEmployees(
             int page, int limit, String department, String status,
-            String search, String sortBy, String sortOrder) {
+            String search, String sortBy, String sortOrder,
+            LocalDate joinDateFrom, LocalDate joinDateTo) {
+
+        if (joinDateFrom != null && joinDateTo != null && joinDateFrom.isAfter(joinDateTo)) {
+            throw new IllegalArgumentException("joinDateFrom must not be after joinDateTo");
+        }
 
         Query query = new Query();
 
@@ -53,6 +59,18 @@ public class EmployeeService {
                     Criteria.where("email").regex(search, "i")
             );
             query.addCriteria(searchCriteria);
+        }
+
+        if (joinDateFrom != null || joinDateTo != null) {
+            Criteria joiningDateCriteria = Criteria.where("joiningDate");
+            if (joinDateFrom != null && joinDateTo != null) {
+                joiningDateCriteria = joiningDateCriteria.gte(joinDateFrom).lte(joinDateTo);
+            } else if (joinDateFrom != null) {
+                joiningDateCriteria = joiningDateCriteria.gte(joinDateFrom);
+            } else {
+                joiningDateCriteria = joiningDateCriteria.lte(joinDateTo);
+            }
+            query.addCriteria(joiningDateCriteria);
         }
 
         long total = mongoTemplate.count(query, Employee.class);

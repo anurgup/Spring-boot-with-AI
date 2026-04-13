@@ -114,12 +114,65 @@ class EmployeeControllerTest {
                 .pagination(ApiResponse.PaginationMeta.builder().total(1).page(1).limit(10)
                         .totalPages(1).hasNextPage(false).hasPrevPage(false).build())
                 .build();
-        when(employeeService.getEmployees(anyInt(), anyInt(), any(), any(), any(), any(), any()))
+        when(employeeService.getEmployees(anyInt(), anyInt(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(response);
         mockMvc.perform(get("/api/employee").param("page", "1").param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.pagination.total").value(1));
+    }
+
+    @Test
+    void getEmployees_WithDateRange_Success() throws Exception {
+        List<EmployeeListResponse> list = List.of(
+                EmployeeListResponse.builder().id("emp_xyz789").firstName("Anurag")
+                        .email("anurag.sharma@company.com").department("Engineering").status("active").build());
+        ApiResponse<List<EmployeeListResponse>> response = ApiResponse.<List<EmployeeListResponse>>builder()
+                .success(true).data(list)
+                .pagination(ApiResponse.PaginationMeta.builder().total(1).page(1).limit(10)
+                        .totalPages(1).hasNextPage(false).hasPrevPage(false).build())
+                .build();
+        when(employeeService.getEmployees(anyInt(), anyInt(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(response);
+        mockMvc.perform(get("/api/employee")
+                        .param("page", "1")
+                        .param("limit", "10")
+                        .param("joinDateFrom", "2024-01-01")
+                        .param("joinDateTo", "2024-12-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.pagination.total").value(1));
+    }
+
+    @Test
+    void getEmployees_WithOnlyJoinDateFrom_Success() throws Exception {
+        List<EmployeeListResponse> list = List.of(
+                EmployeeListResponse.builder().id("emp_xyz789").firstName("Anurag")
+                        .email("anurag.sharma@company.com").department("Engineering").status("active").build());
+        ApiResponse<List<EmployeeListResponse>> response = ApiResponse.<List<EmployeeListResponse>>builder()
+                .success(true).data(list)
+                .pagination(ApiResponse.PaginationMeta.builder().total(1).page(1).limit(10)
+                        .totalPages(1).hasNextPage(false).hasPrevPage(false).build())
+                .build();
+        when(employeeService.getEmployees(anyInt(), anyInt(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(response);
+        mockMvc.perform(get("/api/employee")
+                        .param("joinDateFrom", "2024-01-01"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void getEmployees_InvalidDateRange_ReturnsBadRequest() throws Exception {
+        when(employeeService.getEmployees(anyInt(), anyInt(), any(), any(), any(), any(), any(), any(), any()))
+                .thenThrow(new IllegalArgumentException("joinDateFrom must not be after joinDateTo"));
+        mockMvc.perform(get("/api/employee")
+                        .param("joinDateFrom", "2024-12-31")
+                        .param("joinDateTo", "2024-01-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("joinDateFrom must not be after joinDateTo"));
     }
 
     @Test
