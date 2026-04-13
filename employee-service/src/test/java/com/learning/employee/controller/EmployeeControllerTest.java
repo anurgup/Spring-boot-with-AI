@@ -123,6 +123,31 @@ class EmployeeControllerTest {
     }
 
     @Test
+    void searchByEmployeeId_Success() throws Exception {
+        List<EmployeeListResponse> list = List.of(
+                EmployeeListResponse.builder().id("emp_xyz789").firstName("Anurag")
+                        .email("anurag.sharma@company.com").department("Engineering").status("active").build(),
+                EmployeeListResponse.builder().id("emp_xyz790").firstName("Ankit")
+                        .email("ankit.sharma@company.com").department("Engineering").status("active").build());
+        when(employeeService.searchByPartialEmployeeId("EMP-001")).thenReturn(list);
+        mockMvc.perform(get("/api/employee/search").param("employeeId", "EMP-001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.message").value("Employees found"));
+    }
+
+    @Test
+    void searchByEmployeeId_NotFound() throws Exception {
+        when(employeeService.searchByPartialEmployeeId("UNKNOWN"))
+                .thenThrow(new EmployeeNotFoundException("UNKNOWN"));
+        mockMvc.perform(get("/api/employee/search").param("employeeId", "UNKNOWN"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
+    }
+
+    @Test
     void updateEmployee_Success() throws Exception {
         EmployeeResponse updated = buildEmployeeResponse();
         updated.setDesignation("Lead Developer");
