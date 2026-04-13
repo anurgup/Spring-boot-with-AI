@@ -6,7 +6,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,12 +41,22 @@ public class EmployeeController {
     public ResponseEntity<ApiResponse<List<EmployeeResponse>>> searchByEmployeeId(
             @RequestParam(required = false) String employeeId) {
         if (employeeId == null) {
-            throw new IllegalArgumentException("employeeId parameter is required");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.<List<EmployeeResponse>>builder()
+                            .success(false)
+                            .error("VALIDATION_ERROR")
+                            .message("employeeId parameter is required")
+                            .build());
         }
         if (employeeId.isBlank()) {
-            throw new IllegalArgumentException("employeeId must not be blank");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.<List<EmployeeResponse>>builder()
+                            .success(false)
+                            .error("VALIDATION_ERROR")
+                            .message("employeeId must not be blank")
+                            .build());
         }
-        List<EmployeeResponse> results = employeeService.searchByEmployeeId(employeeId);
+        List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId(employeeId);
         return ResponseEntity.ok(ApiResponse.success(results, "Search completed successfully"));
     }
 

@@ -99,6 +99,42 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void searchByPartialEmployeeId_ReturnsMatchingEmployees() {
+        Employee employee = Employee.builder().id("emp_xyz789").firstName("Anurag").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_xyz789").firstName("Anurag").build();
+
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
+
+        List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("emp_xyz");
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo("emp_xyz789");
+    }
+
+    @Test
+    void searchByPartialEmployeeId_NoMatches_ThrowsEmployeeNotFoundException() {
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> employeeService.searchByPartialEmployeeId("nonexistent"))
+                .isInstanceOf(EmployeeNotFoundException.class);
+    }
+
+    @Test
+    void searchByPartialEmployeeId_MultipleMatches_ReturnsAll() {
+        Employee emp1 = Employee.builder().id("EMP-001").firstName("Alice").build();
+        Employee emp2 = Employee.builder().id("EMP-002").firstName("Bob").build();
+        EmployeeResponse resp1 = EmployeeResponse.builder().id("EMP-001").firstName("Alice").build();
+        EmployeeResponse resp2 = EmployeeResponse.builder().id("EMP-002").firstName("Bob").build();
+
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(emp1, emp2));
+        when(employeeMapper.toResponse(emp1)).thenReturn(resp1);
+        when(employeeMapper.toResponse(emp2)).thenReturn(resp2);
+
+        List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("EMP");
+        assertThat(results).hasSize(2);
+    }
+
+    @Test
     void searchByEmployeeId_ReturnsMatchingEmployees() {
         Employee employee = Employee.builder().id("emp_xyz789").firstName("Anurag").build();
         EmployeeResponse response = EmployeeResponse.builder().id("emp_xyz789").firstName("Anurag").build();
