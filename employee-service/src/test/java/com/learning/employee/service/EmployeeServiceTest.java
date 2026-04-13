@@ -12,12 +12,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
 
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -92,5 +96,26 @@ class EmployeeServiceTest {
         DeleteResponse result = employeeService.deleteEmployee("emp_1");
         assertThat(result.getId()).isEqualTo("emp_1");
         assertThat(result.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void searchByEmployeeId_ReturnsMatchingEmployees() {
+        Employee employee = Employee.builder().id("emp_xyz789").firstName("Anurag").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_xyz789").firstName("Anurag").build();
+
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
+
+        List<EmployeeResponse> results = employeeService.searchByEmployeeId("emp_xyz");
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo("emp_xyz789");
+    }
+
+    @Test
+    void searchByEmployeeId_NoMatches_ReturnsEmptyList() {
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(Collections.emptyList());
+
+        List<EmployeeResponse> results = employeeService.searchByEmployeeId("nonexistent");
+        assertThat(results).isEmpty();
     }
 }
