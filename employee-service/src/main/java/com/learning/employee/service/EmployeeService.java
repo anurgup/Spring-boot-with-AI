@@ -7,15 +7,16 @@ import com.learning.employee.mapper.EmployeeMapper;
 import com.learning.employee.model.Employee;
 import com.learning.employee.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
-import org.bson.types.ObjectId;
 import org.springframework.data.domain.*;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.mongodb.core.aggregation.ConvertOperators;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -87,27 +88,27 @@ public class EmployeeService {
     }
 
     /**
-     * Search employees by MongoDB ObjectId.
-     * Supports exact match (full 24-char hex) or prefix match (partial hex string).
+     * Search employees by ID (exact or partial).
+     * Uses aggregation pipeline: $addFields with $toString converts ObjectId to
+     * a hex string, then $match applies a case-insensitive regex on that string.
+     * This is the correct approach — regex on ObjectId directly causes a BSON error.
      */
     public List<EmployeeResponse> searchByEmployeeId(String employeeId) {
-        List<Employee> employees = new ArrayList<>();
+        Aggregation aggregation = Aggregation.newAggregation(
+            Aggregation.addFields()
+                .addField("_idStr")
+                .withValue(ConvertOperators.ToString.toString("$_id"))
+                .build(),
+            Aggregation.match(
+                Criteria.where("_idStr").regex(employeeId, "i")
+            ),
+            Aggregation.project().andExclude("_idStr")
+        );
 
-        if (ObjectId.isValid(employeeId)) {
-            // Exact match by ObjectId
-            Employee found = employeeRepository.findById(employeeId).orElse(null);
-            if (found != null) employees.add(found);
-        } else {
-            // Prefix/partial match: fetch all and filter by hex string prefix
-            String prefix = employeeId.toLowerCase();
-            Query query = new Query();
-            List<Employee> all = mongoTemplate.find(query, Employee.class);
-            employees = all.stream()
-                    .filter(e -> e.getId() != null && e.getId().toLowerCase().startsWith(prefix))
-                    .collect(Collectors.toList());
-        }
+        AggregationResults<Employee> results =
+            mongoTemplate.aggregate(aggregation, "employees", Employee.class);
 
-        return employees.stream()
+        return results.getMappedResults().stream()
                 .map(employeeMapper::toResponse)
                 .collect(Collectors.toList());
     }
