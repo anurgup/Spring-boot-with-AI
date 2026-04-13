@@ -42,8 +42,20 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("NOT_FOUND", ex.getMessage()));
     }
 
+    @ExceptionHandler(SalaryNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSalaryNotFoundException(SalaryNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("NOT_FOUND", ex.getMessage()));
+    }
+
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<ApiResponse<Void>> handleDuplicateEmailException(DuplicateEmailException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("DUPLICATE_ERROR", ex.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateSalaryException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateSalaryException(DuplicateSalaryException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("DUPLICATE_ERROR", ex.getMessage()));
     }
