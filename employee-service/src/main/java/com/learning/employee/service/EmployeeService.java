@@ -7,6 +7,7 @@ import com.learning.employee.mapper.EmployeeMapper;
 import com.learning.employee.model.Employee;
 import com.learning.employee.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
+import org.bson.types.ObjectId;
 import org.springframework.data.domain.*;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -14,6 +15,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -84,10 +86,27 @@ public class EmployeeService {
                 .build();
     }
 
+    /**
+     * Search employees by MongoDB ObjectId.
+     * Supports exact match (full 24-char hex) or prefix match (partial hex string).
+     */
     public List<EmployeeResponse> searchByEmployeeId(String employeeId) {
-        Query query = new Query();
-        query.addCriteria(Criteria.where("id").regex(employeeId, "i"));
-        List<Employee> employees = mongoTemplate.find(query, Employee.class);
+        List<Employee> employees = new ArrayList<>();
+
+        if (ObjectId.isValid(employeeId)) {
+            // Exact match by ObjectId
+            Employee found = employeeRepository.findById(employeeId).orElse(null);
+            if (found != null) employees.add(found);
+        } else {
+            // Prefix/partial match: fetch all and filter by hex string prefix
+            String prefix = employeeId.toLowerCase();
+            Query query = new Query();
+            List<Employee> all = mongoTemplate.find(query, Employee.class);
+            employees = all.stream()
+                    .filter(e -> e.getId() != null && e.getId().toLowerCase().startsWith(prefix))
+                    .collect(Collectors.toList());
+        }
+
         return employees.stream()
                 .map(employeeMapper::toResponse)
                 .collect(Collectors.toList());
