@@ -37,6 +37,17 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.getEmployees(page, limit, department, status, search, sortBy, sortOrder));
     }
 
+    @GetMapping("/by-department")
+    public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getEmployeesByDepartment(
+            @RequestParam(required = false) String department) {
+        if (department == null || department.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("VALIDATION_ERROR", "Department parameter is required and cannot be blank"));
+        }
+        List<EmployeeResponse> employees = employeeService.getEmployeesByDepartment(department);
+        return ResponseEntity.ok(ApiResponse.success(employees, "Employees retrieved successfully"));
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<ApiResponse<EmployeeResponse>> updateEmployee(
             @PathVariable String id,

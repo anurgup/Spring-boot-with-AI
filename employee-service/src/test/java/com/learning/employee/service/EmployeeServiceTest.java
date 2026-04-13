@@ -12,12 +12,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
 
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,6 +56,29 @@ class EmployeeServiceTest {
         when(employeeRepository.existsByEmail("dup@b.com")).thenReturn(true);
         assertThatThrownBy(() -> employeeService.createEmployee(req))
                 .isInstanceOf(DuplicateEmailException.class);
+    }
+
+    @Test
+    void getEmployeesByDepartment_Success() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com").department("Sales").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").email("a@b.com").department("Sales").salary(BigDecimal.valueOf(50000)).build();
+
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
+
+        List<EmployeeResponse> result = employeeService.getEmployeesByDepartment("Sales");
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getDepartment()).isEqualTo("Sales");
+        assertThat(result.get(0).getId()).isEqualTo("emp_1");
+        assertThat(result.get(0).getSalary()).isEqualByComparingTo(BigDecimal.valueOf(50000));
+    }
+
+    @Test
+    void getEmployeesByDepartment_NotFound_ThrowsException() {
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(Collections.emptyList());
+        assertThatThrownBy(() -> employeeService.getEmployeesByDepartment("NonExistent"))
+                .isInstanceOf(EmployeeNotFoundException.class)
+                .hasMessageContaining("NonExistent");
     }
 
     @Test
