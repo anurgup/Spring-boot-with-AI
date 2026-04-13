@@ -84,6 +84,21 @@ public class EmployeeService {
                 .build();
     }
 
+    public List<EmployeeListResponse> searchByPartialEmployeeId(String employeeId) {
+        if (employeeId == null || employeeId.isBlank()) {
+            throw new IllegalArgumentException("Employee ID search term must not be blank");
+        }
+        Query query = new Query();
+        query.addCriteria(Criteria.where("employeeId").regex(employeeId, "i"));
+        List<Employee> employees = mongoTemplate.find(query, Employee.class);
+        if (employees.isEmpty()) {
+            throw new EmployeeNotFoundException(employeeId);
+        }
+        return employees.stream()
+                .map(employeeMapper::toListResponse)
+                .collect(Collectors.toList());
+    }
+
     public EmployeeResponse updateEmployee(String id, UpdateEmployeeRequest request) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new EmployeeNotFoundException(id));

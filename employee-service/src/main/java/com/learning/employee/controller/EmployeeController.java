@@ -37,6 +37,13 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.getEmployees(page, limit, department, status, search, sortBy, sortOrder));
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<EmployeeListResponse>>> searchByEmployeeId(
+            @RequestParam(required = true) String employeeId) {
+        List<EmployeeListResponse> results = employeeService.searchByPartialEmployeeId(employeeId);
+        return ResponseEntity.ok(ApiResponse.success(results, "Employees found"));
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<ApiResponse<EmployeeResponse>> updateEmployee(
             @PathVariable String id,
