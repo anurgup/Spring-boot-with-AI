@@ -9,9 +9,6 @@ import com.learning.employee.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.aggregation.Aggregation;
-import org.springframework.data.mongodb.core.aggregation.AggregationResults;
-import org.springframework.data.mongodb.core.aggregation.ConvertOperators;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
@@ -87,28 +84,23 @@ public class EmployeeService {
                 .build();
     }
 
-    /**
-     * Search employees by ID (exact or partial).
-     * Uses aggregation pipeline: $addFields with $toString converts ObjectId to
-     * a hex string, then $match applies a case-insensitive regex on that string.
-     * This is the correct approach — regex on ObjectId directly causes a BSON error.
-     */
+    public List<EmployeeResponse> searchByPartialEmployeeId(String employeeId) {
+        Query query = new Query();
+        query.addCriteria(Criteria.where("employeeId").regex(employeeId, "i"));
+        List<Employee> employees = mongoTemplate.find(query, Employee.class);
+        if (employees.isEmpty()) {
+            throw new EmployeeNotFoundException(employeeId);
+        }
+        return employees.stream()
+                .map(employeeMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
     public List<EmployeeResponse> searchByEmployeeId(String employeeId) {
-        Aggregation aggregation = Aggregation.newAggregation(
-            Aggregation.addFields()
-                .addField("_idStr")
-                .withValue(ConvertOperators.ToString.toString("$_id"))
-                .build(),
-            Aggregation.match(
-                Criteria.where("_idStr").regex(employeeId, "i")
-            ),
-            Aggregation.project().andExclude("_idStr")
-        );
-
-        AggregationResults<Employee> results =
-            mongoTemplate.aggregate(aggregation, "employees", Employee.class);
-
-        return results.getMappedResults().stream()
+        Query query = new Query();
+        query.addCriteria(Criteria.where("employeeId").regex(employeeId, "i"));
+        List<Employee> employees = mongoTemplate.find(query, Employee.class);
+        return employees.stream()
                 .map(employeeMapper::toResponse)
                 .collect(Collectors.toList());
     }
