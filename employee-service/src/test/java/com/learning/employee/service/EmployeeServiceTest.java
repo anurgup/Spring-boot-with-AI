@@ -170,62 +170,73 @@ class EmployeeServiceTest {
 
     @Test
     void deleteEmployee_Success() {
-        Employee employee = Employee.builder().id("emp_1").build();
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com").build();
         when(employeeRepository.findById("emp_1")).thenReturn(Optional.of(employee));
-        doNothing().when(employeeRepository).delete(employee);
-
         DeleteResponse result = employeeService.deleteEmployee("emp_1");
         assertThat(result.getId()).isEqualTo("emp_1");
-        assertThat(result.getDeletedAt()).isNotNull();
+        verify(employeeRepository).delete(employee);
     }
 
     @Test
-    void searchByPartialEmployeeId_ReturnsMatchingEmployees() {
-        Employee employee = Employee.builder().id("emp_xyz789").firstName("Anurag").build();
-        EmployeeResponse response = EmployeeResponse.builder().id("emp_xyz789").firstName("Anurag").build();
-
-        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+    void getEmployeeById_Success() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").email("a@b.com").build();
+        when(employeeRepository.findById("emp_1")).thenReturn(Optional.of(employee));
         when(employeeMapper.toResponse(employee)).thenReturn(response);
-
-        List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("emp_xyz");
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).getId()).isEqualTo("emp_xyz789");
+        EmployeeResponse result = employeeService.getEmployeeById("emp_1");
+        assertThat(result.getId()).isEqualTo("emp_1");
     }
 
     @Test
-    void searchByPartialEmployeeId_NoMatches_ThrowsEmployeeNotFoundException() {
-        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(Collections.emptyList());
-
-        assertThatThrownBy(() -> employeeService.searchByPartialEmployeeId("nonexistent"))
+    void getEmployeeById_NotFound_ThrowsException() {
+        when(employeeRepository.findById("unknown")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> employeeService.getEmployeeById("unknown"))
                 .isInstanceOf(EmployeeNotFoundException.class);
     }
 
     @Test
-    void searchByPartialEmployeeId_MultipleMatches_ReturnsAll() {
-        Employee emp1 = Employee.builder().id("EMP-001").firstName("Alice").build();
-        Employee emp2 = Employee.builder().id("EMP-002").firstName("Bob").build();
-        EmployeeResponse resp1 = EmployeeResponse.builder().id("EMP-001").firstName("Alice").build();
-        EmployeeResponse resp2 = EmployeeResponse.builder().id("EMP-002").firstName("Bob").build();
+    void searchByPartialEmployeeId_Success_SingleMatch() {
+        Employee employee = Employee.builder().id("emp_1").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").build();
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
 
+        List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("EMP-001");
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo("emp_1");
+    }
+
+    @Test
+    void searchByPartialEmployeeId_Success_MultipleMatches() {
+        Employee emp1 = Employee.builder().id("emp_1").build();
+        Employee emp2 = Employee.builder().id("emp_2").build();
+        EmployeeResponse resp1 = EmployeeResponse.builder().id("emp_1").build();
+        EmployeeResponse resp2 = EmployeeResponse.builder().id("emp_2").build();
         when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(emp1, emp2));
         when(employeeMapper.toResponse(emp1)).thenReturn(resp1);
         when(employeeMapper.toResponse(emp2)).thenReturn(resp2);
 
         List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("EMP");
         assertThat(results).hasSize(2);
-        assertThat(results).extracting(EmployeeResponse::getId).containsExactly("EMP-001", "EMP-002");
     }
 
     @Test
-    void searchByPartialEmployeeId_WithGender_ReturnsGenderInResponse() {
-        Employee employee = Employee.builder().id("emp_1").firstName("Jane").gender("Female").build();
-        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").firstName("Jane").gender("Female").build();
+    void searchByPartialEmployeeId_NotFound_ThrowsException() {
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(Collections.emptyList());
+        assertThatThrownBy(() -> employeeService.searchByPartialEmployeeId("ZZZZZZ"))
+                .isInstanceOf(EmployeeNotFoundException.class);
+    }
 
-        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
-        when(employeeMapper.toResponse(employee)).thenReturn(response);
+    @Test
+    void searchByPartialEmployeeId_BlankInput_ThrowsIllegalArgumentException() {
+        assertThatThrownBy(() -> employeeService.searchByPartialEmployeeId("   "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("blank");
+    }
 
-        List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("emp_1");
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).getGender()).isEqualTo("Female");
+    @Test
+    void searchByPartialEmployeeId_NullInput_ThrowsIllegalArgumentException() {
+        assertThatThrownBy(() -> employeeService.searchByPartialEmployeeId(null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

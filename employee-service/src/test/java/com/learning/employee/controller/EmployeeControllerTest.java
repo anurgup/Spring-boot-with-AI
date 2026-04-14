@@ -169,10 +169,10 @@ class EmployeeControllerTest {
     }
 
     @Test
-    void searchByEmployeeId_MultipleMatches_Returns200() throws Exception {
+    void searchByEmployeeId_MultipleMatches_ReturnsOk() throws Exception {
         List<EmployeeResponse> results = List.of(
-                EmployeeResponse.builder().id("EMP-001").firstName("Alice").build(),
-                EmployeeResponse.builder().id("EMP-002").firstName("Bob").build()
+                EmployeeResponse.builder().id("emp_1").build(),
+                EmployeeResponse.builder().id("emp_2").build()
         );
         when(employeeService.searchByPartialEmployeeId("EMP")).thenReturn(results);
         mockMvc.perform(get("/api/employee/search").param("employeeId", "EMP"))
@@ -182,9 +182,9 @@ class EmployeeControllerTest {
     }
 
     @Test
-    void searchByEmployeeId_SingleMatch_Returns200() throws Exception {
+    void searchByEmployeeId_SingleMatch_ReturnsOk() throws Exception {
         List<EmployeeResponse> results = List.of(
-                EmployeeResponse.builder().id("EMP-001").firstName("Alice").build()
+                EmployeeResponse.builder().id("emp_1").build()
         );
         when(employeeService.searchByPartialEmployeeId("EMP-001")).thenReturn(results);
         mockMvc.perform(get("/api/employee/search").param("employeeId", "EMP-001"))
@@ -194,12 +194,12 @@ class EmployeeControllerTest {
     }
 
     @Test
-    void searchByEmployeeId_CaseInsensitive_Returns200() throws Exception {
+    void searchByEmployeeId_CaseInsensitive_ReturnsOk() throws Exception {
         List<EmployeeResponse> results = List.of(
-                EmployeeResponse.builder().id("EMP-001").firstName("Alice").build()
+                EmployeeResponse.builder().id("emp_1").build()
         );
-        when(employeeService.searchByPartialEmployeeId("emp-00")).thenReturn(results);
-        mockMvc.perform(get("/api/employee/search").param("employeeId", "emp-00"))
+        when(employeeService.searchByPartialEmployeeId("emp-001")).thenReturn(results);
+        mockMvc.perform(get("/api/employee/search").param("employeeId", "emp-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }
@@ -217,13 +217,34 @@ class EmployeeControllerTest {
     void searchByEmployeeId_MissingParam_Returns400() throws Exception {
         mockMvc.perform(get("/api/employee/search"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
     }
 
     @Test
     void searchByEmployeeId_BlankParam_Returns400() throws Exception {
         mockMvc.perform(get("/api/employee/search").param("employeeId", "   "))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void getEmployeeById_Success() throws Exception {
+        EmployeeResponse response = buildEmployeeResponse();
+        when(employeeService.getEmployeeById("emp_xyz789")).thenReturn(response);
+        mockMvc.perform(get("/api/employee/emp_xyz789"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Employee retrieved successfully"))
+                .andExpect(jsonPath("$.data.id").value("emp_xyz789"));
+    }
+
+    @Test
+    void getEmployeeById_NotFound() throws Exception {
+        when(employeeService.getEmployeeById("unknown")).thenThrow(new EmployeeNotFoundException("unknown"));
+        mockMvc.perform(get("/api/employee/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 }
