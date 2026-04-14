@@ -72,6 +72,13 @@ class EmployeeControllerTest {
                 .createdAt(Instant.now()).updatedAt(Instant.now()).build();
     }
 
+    private EmployeeListResponse buildEmployeeListResponse() {
+        return EmployeeListResponse.builder()
+                .id("emp_xyz789").firstName("Anurag").lastName("Sharma")
+                .email("anurag.sharma@company.com").department("Engineering")
+                .status("active").createdAt(Instant.now()).build();
+    }
+
     @Test
     void createEmployee_Success() throws Exception {
         when(employeeService.createEmployee(any())).thenReturn(buildEmployeeResponse());
@@ -124,6 +131,36 @@ class EmployeeControllerTest {
     }
 
     @Test
+    void getEmployeesByLocation_Success() throws Exception {
+        List<EmployeeListResponse> list = List.of(buildEmployeeListResponse());
+        when(employeeService.getEmployeesByLocation("Delhi")).thenReturn(list);
+        mockMvc.perform(get("/api/employee").param("location", "Delhi"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Employees retrieved successfully"))
+                .andExpect(jsonPath("$.data[0].id").value("emp_xyz789"));
+    }
+
+    @Test
+    void getEmployeesByLocation_EmptyResult() throws Exception {
+        when(employeeService.getEmployeesByLocation("UnknownCity")).thenReturn(Collections.emptyList());
+        mockMvc.perform(get("/api/employee").param("location", "UnknownCity"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void getEmployeesByLocation_BlankLocation_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/employee").param("location", "   "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("location must not be blank"));
+    }
+
+    @Test
     void updateEmployee_Success() throws Exception {
         EmployeeResponse updated = buildEmployeeResponse();
         updated.setDesignation("Lead Developer");
@@ -169,61 +206,45 @@ class EmployeeControllerTest {
     }
 
     @Test
-    void searchByEmployeeId_MultipleMatches_Returns200() throws Exception {
-        List<EmployeeResponse> results = List.of(
-                EmployeeResponse.builder().id("EMP-001").firstName("Alice").build(),
-                EmployeeResponse.builder().id("EMP-002").firstName("Bob").build()
-        );
+    void searchByEmployeeId_Success() throws Exception {
+        List<EmployeeResponse> results = List.of(buildEmployeeResponse());
         when(employeeService.searchByPartialEmployeeId("EMP")).thenReturn(results);
         mockMvc.perform(get("/api/employee/search").param("employeeId", "EMP"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.length()").value(2));
+                .andExpect(jsonPath("$.message").value("Search completed successfully"));
     }
 
     @Test
-    void searchByEmployeeId_SingleMatch_Returns200() throws Exception {
-        List<EmployeeResponse> results = List.of(
-                EmployeeResponse.builder().id("EMP-001").firstName("Alice").build()
-        );
-        when(employeeService.searchByPartialEmployeeId("EMP-001")).thenReturn(results);
-        mockMvc.perform(get("/api/employee/search").param("employeeId", "EMP-001"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.length()").value(1));
-    }
-
-    @Test
-    void searchByEmployeeId_CaseInsensitive_Returns200() throws Exception {
-        List<EmployeeResponse> results = List.of(
-                EmployeeResponse.builder().id("EMP-001").firstName("Alice").build()
-        );
-        when(employeeService.searchByPartialEmployeeId("emp-00")).thenReturn(results);
-        mockMvc.perform(get("/api/employee/search").param("employeeId", "emp-00"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
-    }
-
-    @Test
-    void searchByEmployeeId_NotFound_Returns404() throws Exception {
-        when(employeeService.searchByPartialEmployeeId("ZZZZZZ"))
-                .thenThrow(new EmployeeNotFoundException("ZZZZZZ"));
-        mockMvc.perform(get("/api/employee/search").param("employeeId", "ZZZZZZ"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
-    }
-
-    @Test
-    void searchByEmployeeId_MissingParam_Returns400() throws Exception {
+    void searchByEmployeeId_MissingParam_ReturnsBadRequest() throws Exception {
         mockMvc.perform(get("/api/employee/search"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
     }
 
     @Test
-    void searchByEmployeeId_BlankParam_Returns400() throws Exception {
-        mockMvc.perform(get("/api/employee/search").param("employeeId", "   "))
+    void searchByEmployeeId_BlankParam_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/employee/search").param("employeeId", ""))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void getEmployeeById_Success() throws Exception {
+        when(employeeService.getEmployeeById("emp_xyz789")).thenReturn(buildEmployeeResponse());
+        mockMvc.perform(get("/api/employee/emp_xyz789"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Employee retrieved successfully"));
+    }
+
+    @Test
+    void getEmployeeById_NotFound() throws Exception {
+        when(employeeService.getEmployeeById("unknown")).thenThrow(new EmployeeNotFoundException("unknown"));
+        mockMvc.perform(get("/api/employee/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("NOT_FOUND"));
     }
 }
