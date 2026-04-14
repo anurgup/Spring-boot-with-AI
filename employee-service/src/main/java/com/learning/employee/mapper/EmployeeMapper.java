@@ -21,6 +21,7 @@ public class EmployeeMapper {
                 .managerId(request.getManagerId())
                 .address(toAddressEntity(request.getAddress()))
                 .status(request.getStatus() != null ? request.getStatus() : "active")
+                .gender(request.getGender())
                 .build();
     }
 
@@ -38,6 +39,7 @@ public class EmployeeMapper {
                 .managerId(employee.getManagerId())
                 .address(toAddressDto(employee.getAddress()))
                 .status(employee.getStatus())
+                .gender(employee.getGender())
                 .createdAt(employee.getCreatedAt())
                 .updatedAt(employee.getUpdatedAt())
                 .build();
@@ -62,6 +64,7 @@ public class EmployeeMapper {
         if (request.getDepartment() != null) employee.setDepartment(request.getDepartment());
         if (request.getPhone() != null) employee.setPhone(request.getPhone());
         if (request.getStatus() != null) employee.setStatus(request.getStatus());
+        if (request.getGender() != null) employee.setGender(request.getGender());
         if (request.getAddress() != null) {
             if (employee.getAddress() == null) {
                 employee.setAddress(toAddressEntity(request.getAddress()));

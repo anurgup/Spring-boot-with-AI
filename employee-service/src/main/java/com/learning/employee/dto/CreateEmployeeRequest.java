@@ -39,4 +39,5 @@ public class CreateEmployeeRequest {
     private AddressDto address;
 
     private String status;
+    private String gender;
 }
