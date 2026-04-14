@@ -84,7 +84,27 @@ public class EmployeeService {
                 .build();
     }
 
+    public List<EmployeeListResponse> getEmployeesByLocation(String location) {
+        if (location == null || location.isBlank()) {
+            throw new IllegalArgumentException("location must not be blank");
+        }
+        Query query = new Query();
+        Criteria locationCriteria = new Criteria().orOperator(
+                Criteria.where("address.city").regex(location, "i"),
+                Criteria.where("address.state").regex(location, "i"),
+                Criteria.where("address.country").regex(location, "i")
+        );
+        query.addCriteria(locationCriteria);
+        List<Employee> employees = mongoTemplate.find(query, Employee.class);
+        return employees.stream()
+                .map(employeeMapper::toListResponse)
+                .collect(Collectors.toList());
+    }
+
     public List<EmployeeResponse> searchByPartialEmployeeId(String employeeId) {
+        if (employeeId == null || employeeId.isBlank()) {
+            throw new IllegalArgumentException("employeeId must not be blank");
+        }
         Query query = new Query();
         query.addCriteria(Criteria.where("employeeId").regex(employeeId, "i"));
         List<Employee> employees = mongoTemplate.find(query, Employee.class);
@@ -128,5 +148,4 @@ public class EmployeeService {
                 .orElseThrow(() -> new EmployeeNotFoundException(id));
         return employeeMapper.toResponse(employee);
     }
-
 }

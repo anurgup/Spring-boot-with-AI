@@ -32,8 +32,21 @@ public class EmployeeController {
             @RequestParam(required = false) String department,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String location,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortOrder) {
+        if (location != null) {
+            if (location.isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ApiResponse.<List<EmployeeListResponse>>builder()
+                                .success(false)
+                                .error("VALIDATION_ERROR")
+                                .message("location must not be blank")
+                                .build());
+            }
+            List<EmployeeListResponse> results = employeeService.getEmployeesByLocation(location);
+            return ResponseEntity.ok(ApiResponse.success(results, "Employees retrieved successfully"));
+        }
         return ResponseEntity.ok(employeeService.getEmployees(page, limit, department, status, search, sortBy, sortOrder));
     }
 
@@ -79,5 +92,4 @@ public class EmployeeController {
         EmployeeResponse employee = employeeService.getEmployeeById(id);
         return ResponseEntity.ok(ApiResponse.success(employee, "Employee retrieved successfully"));
     }
-
 }
