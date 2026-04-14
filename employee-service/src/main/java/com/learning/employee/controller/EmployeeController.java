@@ -73,4 +73,11 @@ public class EmployeeController {
         DeleteResponse deleteResponse = employeeService.deleteEmployee(id);
         return ResponseEntity.ok(ApiResponse.success(deleteResponse, "Employee deleted successfully"));
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<EmployeeResponse>> getEmployeeById(@PathVariable String id) {
+        EmployeeResponse employee = employeeService.getEmployeeById(id);
+        return ResponseEntity.ok(ApiResponse.success(employee, "Employee retrieved successfully"));
+    }
+
 }
