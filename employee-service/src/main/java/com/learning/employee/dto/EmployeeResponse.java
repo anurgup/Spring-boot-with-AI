@@ -28,6 +28,7 @@ public class EmployeeResponse {
     private String managerId;
     private AddressDto address;
     private String status;
+    private String gender;
     private Instant createdAt;
     private Instant updatedAt;
 }

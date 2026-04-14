@@ -18,6 +18,7 @@ public class UpdateEmployeeRequest {
     private BigDecimal salary;
     private String department;
     private String phone;
+    private String gender;
 
     @Valid
     private AddressDto address;

@@ -38,6 +38,7 @@ public class Employee {
     private String managerId;
     private Address address;
     private String status;
+    private String gender;
 
     @CreatedDate
     private Instant createdAt;
