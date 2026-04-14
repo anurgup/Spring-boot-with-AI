@@ -84,6 +84,23 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void createEmployee_WithFreeTextGender_Success() {
+        CreateEmployeeRequest req = CreateEmployeeRequest.builder()
+                .firstName("Alex").lastName("Smith")
+                .email("alex@b.com").status("active").gender("Prefer not to say").build();
+        Employee entity = Employee.builder().id("emp_2").email("alex@b.com").gender("Prefer not to say").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_2").email("alex@b.com").gender("Prefer not to say").build();
+
+        when(employeeRepository.existsByEmail("alex@b.com")).thenReturn(false);
+        when(employeeMapper.toEntity(req)).thenReturn(entity);
+        when(employeeRepository.save(entity)).thenReturn(entity);
+        when(employeeMapper.toResponse(entity)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.createEmployee(req);
+        assertThat(result.getGender()).isEqualTo("Prefer not to say");
+    }
+
+    @Test
     void createEmployee_DuplicateEmail_ThrowsException() {
         CreateEmployeeRequest req = CreateEmployeeRequest.builder()
                 .firstName("A").lastName("B").email("dup@b.com").build();
@@ -127,6 +144,21 @@ class EmployeeServiceTest {
 
         EmployeeResponse result = employeeService.updateEmployee("emp_1", req);
         assertThat(result.getGender()).isEqualTo("Non-binary");
+    }
+
+    @Test
+    void updateEmployee_GenderNotOverwrittenWhenNull() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com").gender("Female").build();
+        UpdateEmployeeRequest req = UpdateEmployeeRequest.builder()
+                .designation("Senior Engineer").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").designation("Senior Engineer").gender("Female").build();
+
+        when(employeeRepository.findById("emp_1")).thenReturn(Optional.of(employee));
+        when(employeeRepository.save(employee)).thenReturn(employee);
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.updateEmployee("emp_1", req);
+        assertThat(result.getGender()).isEqualTo("Female");
     }
 
     @Test
@@ -181,5 +213,19 @@ class EmployeeServiceTest {
 
         List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("EMP");
         assertThat(results).hasSize(2);
+        assertThat(results).extracting(EmployeeResponse::getId).containsExactly("EMP-001", "EMP-002");
+    }
+
+    @Test
+    void searchByPartialEmployeeId_WithGender_ReturnsGenderInResponse() {
+        Employee employee = Employee.builder().id("emp_1").firstName("Jane").gender("Female").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").firstName("Jane").gender("Female").build();
+
+        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
+
+        List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("emp_1");
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getGender()).isEqualTo("Female");
     }
 }
