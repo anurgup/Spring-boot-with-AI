@@ -84,6 +84,23 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void createEmployee_WithFreeTextGender_Success() {
+        CreateEmployeeRequest req = CreateEmployeeRequest.builder()
+                .firstName("Alex").lastName("Smith")
+                .email("alex@b.com").status("active").gender("Prefer not to say").build();
+        Employee entity = Employee.builder().id("emp_2").email("alex@b.com").gender("Prefer not to say").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_2").email("alex@b.com").gender("Prefer not to say").build();
+
+        when(employeeRepository.existsByEmail("alex@b.com")).thenReturn(false);
+        when(employeeMapper.toEntity(req)).thenReturn(entity);
+        when(employeeRepository.save(entity)).thenReturn(entity);
+        when(employeeMapper.toResponse(entity)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.createEmployee(req);
+        assertThat(result.getGender()).isEqualTo("Prefer not to say");
+    }
+
+    @Test
     void createEmployee_DuplicateEmail_ThrowsException() {
         CreateEmployeeRequest req = CreateEmployeeRequest.builder()
                 .firstName("A").lastName("B").email("dup@b.com").build();
@@ -130,6 +147,21 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void updateEmployee_GenderNotProvided_DoesNotClearGender() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com").gender("Female").build();
+        UpdateEmployeeRequest req = UpdateEmployeeRequest.builder()
+                .designation("Manager").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").designation("Manager").gender("Female").build();
+
+        when(employeeRepository.findById("emp_1")).thenReturn(Optional.of(employee));
+        when(employeeRepository.save(employee)).thenReturn(employee);
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.updateEmployee("emp_1", req);
+        assertThat(result.getGender()).isEqualTo("Female");
+    }
+
+    @Test
     void deleteEmployee_NotFound_ThrowsException() {
         when(employeeRepository.findById("unknown")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> employeeService.deleteEmployee("unknown"))
@@ -172,12 +204,12 @@ class EmployeeServiceTest {
     void searchByPartialEmployeeId_MultipleMatches_ReturnsAll() {
         Employee emp1 = Employee.builder().id("EMP-001").firstName("Alice").build();
         Employee emp2 = Employee.builder().id("EMP-002").firstName("Bob").build();
-        EmployeeResponse resp1 = EmployeeResponse.builder().id("EMP-001").firstName("Alice").build();
-        EmployeeResponse resp2 = EmployeeResponse.builder().id("EMP-002").firstName("Bob").build();
+        EmployeeResponse res1 = EmployeeResponse.builder().id("EMP-001").firstName("Alice").build();
+        EmployeeResponse res2 = EmployeeResponse.builder().id("EMP-002").firstName("Bob").build();
 
         when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(emp1, emp2));
-        when(employeeMapper.toResponse(emp1)).thenReturn(resp1);
-        when(employeeMapper.toResponse(emp2)).thenReturn(resp2);
+        when(employeeMapper.toResponse(emp1)).thenReturn(res1);
+        when(employeeMapper.toResponse(emp2)).thenReturn(res2);
 
         List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("EMP");
         assertThat(results).hasSize(2);
