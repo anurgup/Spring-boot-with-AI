@@ -85,6 +85,9 @@ public class EmployeeService {
     }
 
     public List<EmployeeResponse> searchByPartialEmployeeId(String employeeId) {
+        if (employeeId == null || employeeId.isBlank()) {
+            throw new IllegalArgumentException("employeeId must not be blank");
+        }
         Query query = new Query();
         query.addCriteria(Criteria.where("employeeId").regex(employeeId, "i"));
         List<Employee> employees = mongoTemplate.find(query, Employee.class);
@@ -128,5 +131,4 @@ public class EmployeeService {
                 .orElseThrow(() -> new EmployeeNotFoundException(id));
         return employeeMapper.toResponse(employee);
     }
-
 }
