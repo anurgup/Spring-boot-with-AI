@@ -122,4 +122,11 @@ public class EmployeeService {
                 .deletedAt(Instant.now())
                 .build();
     }
+
+    public EmployeeResponse getEmployeeById(String id) {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new EmployeeNotFoundException(id));
+        return employeeMapper.toResponse(employee);
+    }
+
 }
