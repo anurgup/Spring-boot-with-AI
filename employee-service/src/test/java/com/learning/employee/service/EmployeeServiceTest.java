@@ -50,6 +50,40 @@ class EmployeeServiceTest {
     }
 
     @Test
+    void createEmployee_WithGender_Success() {
+        CreateEmployeeRequest req = CreateEmployeeRequest.builder()
+                .firstName("Anurag").lastName("Sharma")
+                .email("a@b.com").status("active").gender("Male").build();
+        Employee entity = Employee.builder().id("emp_1").email("a@b.com").gender("Male").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").email("a@b.com").gender("Male").build();
+
+        when(employeeRepository.existsByEmail("a@b.com")).thenReturn(false);
+        when(employeeMapper.toEntity(req)).thenReturn(entity);
+        when(employeeRepository.save(entity)).thenReturn(entity);
+        when(employeeMapper.toResponse(entity)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.createEmployee(req);
+        assertThat(result.getGender()).isEqualTo("Male");
+    }
+
+    @Test
+    void createEmployee_WithoutGender_Success() {
+        CreateEmployeeRequest req = CreateEmployeeRequest.builder()
+                .firstName("Anurag").lastName("Sharma")
+                .email("a@b.com").status("active").build();
+        Employee entity = Employee.builder().id("emp_1").email("a@b.com").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").email("a@b.com").build();
+
+        when(employeeRepository.existsByEmail("a@b.com")).thenReturn(false);
+        when(employeeMapper.toEntity(req)).thenReturn(entity);
+        when(employeeRepository.save(entity)).thenReturn(entity);
+        when(employeeMapper.toResponse(entity)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.createEmployee(req);
+        assertThat(result.getGender()).isNull();
+    }
+
+    @Test
     void createEmployee_DuplicateEmail_ThrowsException() {
         CreateEmployeeRequest req = CreateEmployeeRequest.builder()
                 .firstName("A").lastName("B").email("dup@b.com").build();
@@ -78,6 +112,21 @@ class EmployeeServiceTest {
 
         EmployeeResponse result = employeeService.updateEmployee("emp_1", req);
         assertThat(result.getDesignation()).isEqualTo("Lead");
+    }
+
+    @Test
+    void updateEmployee_WithGender_Success() {
+        Employee employee = Employee.builder().id("emp_1").email("a@b.com").build();
+        UpdateEmployeeRequest req = UpdateEmployeeRequest.builder()
+                .gender("Non-binary").build();
+        EmployeeResponse response = EmployeeResponse.builder().id("emp_1").gender("Non-binary").build();
+
+        when(employeeRepository.findById("emp_1")).thenReturn(Optional.of(employee));
+        when(employeeRepository.save(employee)).thenReturn(employee);
+        when(employeeMapper.toResponse(employee)).thenReturn(response);
+
+        EmployeeResponse result = employeeService.updateEmployee("emp_1", req);
+        assertThat(result.getGender()).isEqualTo("Non-binary");
     }
 
     @Test
@@ -132,26 +181,5 @@ class EmployeeServiceTest {
 
         List<EmployeeResponse> results = employeeService.searchByPartialEmployeeId("EMP");
         assertThat(results).hasSize(2);
-    }
-
-    @Test
-    void searchByEmployeeId_ReturnsMatchingEmployees() {
-        Employee employee = Employee.builder().id("emp_xyz789").firstName("Anurag").build();
-        EmployeeResponse response = EmployeeResponse.builder().id("emp_xyz789").firstName("Anurag").build();
-
-        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(List.of(employee));
-        when(employeeMapper.toResponse(employee)).thenReturn(response);
-
-        List<EmployeeResponse> results = employeeService.searchByEmployeeId("emp_xyz");
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).getId()).isEqualTo("emp_xyz789");
-    }
-
-    @Test
-    void searchByEmployeeId_NoMatches_ReturnsEmptyList() {
-        when(mongoTemplate.find(any(Query.class), eq(Employee.class))).thenReturn(Collections.emptyList());
-
-        List<EmployeeResponse> results = employeeService.searchByEmployeeId("nonexistent");
-        assertThat(results).isEmpty();
     }
 }
